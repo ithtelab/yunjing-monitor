@@ -17,6 +17,7 @@
   <img src="https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go 1.26">
   <img src="https://img.shields.io/badge/Vue-3-42B883?style=flat-square&logo=vuedotjs&logoColor=white" alt="Vue 3">
   <img src="https://img.shields.io/badge/self--hosted-ready-111827?style=flat-square" alt="Self-hosted">
+  <a href="https://linux.do/" rel="nofollow"><img src="https://img.shields.io/badge/%E7%A4%BE%E5%8C%BA-LinuxDO-fbbf24?style=flat-square&labelColor=1f2937&logoColor=111827" alt="LinuxDO 社区"></a>
 </p>
 
 <p align="center">
@@ -91,6 +92,10 @@
 | [API 文档](./docs/api.md) | 公开接口、认证方式与集成说明 |
 | [安全策略](./SECURITY.md) | 漏洞报告范围与私密提交流程 |
 | [贡献指南](./CONTRIBUTING.md) | 本地开发、提交规范与 Pull Request |
+
+## 社区交流
+
+欢迎加入 [LinuxDO 社区](https://linux.do/)，参与云镜监控的部署交流、问题排查、功能建议和实践分享。发帖前请遵守社区规则，并注意不要公开服务器密码、Token、备份密钥等敏感信息。
 
 <details>
 <summary><strong>English overview</strong></summary>
