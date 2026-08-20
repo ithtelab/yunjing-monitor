@@ -1,0 +1,12 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Documented API-key placeholder"
+paths = ['''README\.md''']
+regexes = ['''YOUR_API_KEY''']
+
+[[allowlists]]
+description = "RFC 6455 WebSocket test vectors"
+paths = ['''internal/server/(websocket_test|store_test)\.go''']
+regexes = ['''dGhlIHNhbXBsZSBub25jZQ==''', '''dGhlIHNhbXBsZSBub25jZTEyMzQ=''']

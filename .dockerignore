@@ -1,0 +1,12 @@
+**
+!.dockerignore
+!deploy/
+!deploy/docker/
+!deploy/docker/Dockerfile
+!deploy/docker/entrypoint.sh
+!release/
+!release/vps-server-linux-amd64
+!release/vps-server-linux-arm64
+!bin/
+!bin/vps-server-linux-amd64
+!bin/vps-server-linux-arm64

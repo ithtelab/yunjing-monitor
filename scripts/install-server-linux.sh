@@ -1,0 +1,144 @@
+#!/usr/bin/env sh
+set -eu
+
+AUTH_SECRET=""
+BACKUP_ENCRYPTION_KEY=""
+ADMIN_USER="admin"
+ADMIN_PASS=""
+PUBLIC_URL=""
+BIN_URL=""
+STORE_DRIVER=""
+DB_PATH=""
+CORS_ORIGINS=""
+
+random_secret() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 32
+    return
+  fi
+  dd if=/dev/urandom bs=32 count=1 2>/dev/null | od -An -tx1 | tr -d ' \n'
+}
+
+is_weak_secret() {
+  value="$1"
+  [ -z "$value" ] || [ "$value" = "change-me" ]
+}
+
+existing_env_value() {
+  key="$1"
+  [ -f /etc/vps-monitor/server.env ] || return 0
+  sed -n "s/^${key}=//p" /etc/vps-monitor/server.env | head -n 1
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --auth-secret) AUTH_SECRET="$2"; shift 2 ;;
+    --backup-encryption-key) BACKUP_ENCRYPTION_KEY="$2"; shift 2 ;;
+    --admin-user) ADMIN_USER="$2"; shift 2 ;;
+    --admin-pass) ADMIN_PASS="$2"; shift 2 ;;
+    --public-url) PUBLIC_URL="$2"; shift 2 ;;
+    --bin-url) BIN_URL="$2"; shift 2 ;;
+    --store-driver) STORE_DRIVER="$2"; shift 2 ;;
+    --db-path) DB_PATH="$2"; shift 2 ;;
+    --cors-origins) CORS_ORIGINS="$2"; shift 2 ;;
+    *) echo "unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+if [ -z "$BACKUP_ENCRYPTION_KEY" ]; then
+  BACKUP_ENCRYPTION_KEY="$(existing_env_value BACKUP_ENCRYPTION_KEY)"
+fi
+
+if is_weak_secret "$AUTH_SECRET"; then
+  AUTH_SECRET="$(random_secret)"
+  GENERATED_AUTH_SECRET="1"
+else
+  GENERATED_AUTH_SECRET="0"
+fi
+
+if is_weak_secret "$BACKUP_ENCRYPTION_KEY"; then
+  BACKUP_ENCRYPTION_KEY="$(random_secret)"
+  GENERATED_BACKUP_ENCRYPTION_KEY="1"
+else
+  GENERATED_BACKUP_ENCRYPTION_KEY="0"
+fi
+
+if is_weak_secret "$ADMIN_PASS"; then
+  ADMIN_PASS="$(random_secret)"
+  GENERATED_ADMIN_PASS="1"
+else
+  GENERATED_ADMIN_PASS="0"
+fi
+
+install -d /etc/vps-monitor /usr/local/bin /var/lib/vps-monitor
+umask 077
+
+if [ -n "$BIN_URL" ]; then
+  TMP="$(mktemp)"
+  curl -fsSL "$BIN_URL" -o "$TMP"
+  install -m 0755 "$TMP" /usr/local/bin/vps-server
+  rm -f "$TMP"
+else
+  if [ ! -x ./vps-server ]; then
+    echo "./vps-server not found; pass --bin-url or run from a build directory" >&2
+    exit 1
+  fi
+  install -m 0755 ./vps-server /usr/local/bin/vps-server
+fi
+
+cat >/etc/vps-monitor/server.env <<EOF
+ADDR=:3000
+AUTH_SECRET=$AUTH_SECRET
+BACKUP_ENCRYPTION_KEY=$BACKUP_ENCRYPTION_KEY
+BACKUP_DIR=/var/lib/vps-monitor/backups
+BACKUP_INTERVAL=24h
+ADMIN_USER=$ADMIN_USER
+ADMIN_PASS=$ADMIN_PASS
+PUBLIC_URL=$PUBLIC_URL
+DATA_PATH=/var/lib/vps-monitor/server.json
+EOF
+if [ -n "$STORE_DRIVER" ]; then
+  printf "STORE_DRIVER=%s\n" "$STORE_DRIVER" >>/etc/vps-monitor/server.env
+fi
+if [ -n "$DB_PATH" ]; then
+  printf "DB_PATH=%s\n" "$DB_PATH" >>/etc/vps-monitor/server.env
+fi
+if [ -n "$CORS_ORIGINS" ]; then
+  printf "CORS_ORIGINS=%s\n" "$CORS_ORIGINS" >>/etc/vps-monitor/server.env
+fi
+chmod 600 /etc/vps-monitor/server.env
+
+cat >/etc/systemd/system/vps-server.service <<'EOF'
+[Unit]
+Description=VPS Monitor Center Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/vps-monitor/server.env
+ExecStart=/usr/local/bin/vps-server
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/vps-monitor /etc/vps-monitor
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now vps-server
+echo "vps-server installed"
+if [ "$GENERATED_AUTH_SECRET" = "1" ]; then
+  echo "generated internal AUTH_SECRET in /etc/vps-monitor/server.env"
+fi
+if [ "$GENERATED_BACKUP_ENCRYPTION_KEY" = "1" ]; then
+  echo "generated independent BACKUP_ENCRYPTION_KEY in /etc/vps-monitor/server.env"
+fi
+if [ "$GENERATED_ADMIN_PASS" = "1" ]; then
+  echo "generated admin login: $ADMIN_USER / $ADMIN_PASS"
+fi

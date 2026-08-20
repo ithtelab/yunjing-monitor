@@ -1,0 +1,16 @@
+<script setup>
+import { useI18n } from 'vue-i18n'
+import MetricAreaChart from '@/components/charts/MetricAreaChart.vue'
+
+defineProps({
+  data: { type: Array, default: () => [] },
+  live: { type: Boolean, default: true },
+  dark: { type: Boolean, default: false },
+})
+
+const { t } = useI18n()
+</script>
+
+<template>
+  <MetricAreaChart :title="t('chart-network-down')" value-type="rate" color="#9a50c7" :data="data" :live="live" :dark="dark" />
+</template>

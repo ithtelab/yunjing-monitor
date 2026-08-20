@@ -1,0 +1,62 @@
+services:
+  monitor-party:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+      args:
+        SERVER_BINARY: ${SERVER_BINARY:-release/vps-server-linux-amd64}
+    image: monitor-party:local
+    container_name: monitor-party
+    restart: unless-stopped
+    # No env_file: Baota often starts compose from /tmp and relative env files fail.
+    environment:
+      ADDR: ${ADDR:-0.0.0.0:1314}
+      # Required: startup fails until strong values (at least 16 characters) are supplied.
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASS: ${ADMIN_PASS:-}
+      DATA_PATH: ${DATA_PATH:-/app/data/server.json}
+      STORE_DRIVER: ${STORE_DRIVER:-json}
+      DB_PATH: ${DB_PATH:-/app/data/server.db}
+      PUBLIC_URL: ${PUBLIC_URL:-http://127.0.0.1:1314}
+      # Opt in only when public visitors should see host fingerprints and per-filesystem details.
+      PUBLIC_MONITOR_DETAILS: ${PUBLIC_MONITOR_DETAILS:-false}
+      OFFLINE_WAIT: ${OFFLINE_WAIT:-60s}
+      MAX_NODES: ${MAX_NODES:-2000}
+      UPDATE_REPOSITORY: ${UPDATE_REPOSITORY:-ithtelab/yunjing-monitor}
+      UPDATE_ENABLED: ${UPDATE_ENABLED:-false}
+      # Private repository token stays server-side and is never returned by the API.
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      # Required to enable full encrypted backups. Generate with: openssl rand -base64 48
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-}
+      BACKUP_DIR: ${BACKUP_DIR:-/app/data/backups}
+      BACKUP_INTERVAL: ${BACKUP_INTERVAL:-0}
+      BACKUP_WEBDAV_URL: ${BACKUP_WEBDAV_URL:-}
+      BACKUP_WEBDAV_USER: ${BACKUP_WEBDAV_USER:-}
+      BACKUP_WEBDAV_PASSWORD: ${BACKUP_WEBDAV_PASSWORD:-}
+    ports:
+      - "${HOST_BIND:-127.0.0.1}:${HOST_PORT:-1314}:1314"
+    volumes:
+      - ./data:/app/data
+    # Do NOT set user: here. Entrypoint starts as root, fixes /app/data perms, then drops to 10001.
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Needed so entrypoint can chown the mounted volume before dropping privileges.
+    cap_add:
+      - CHOWN
+      - FOWNER
+      - DAC_OVERRIDE
+      # su-exec 切换运行用户需要（否则 setgroups(10001): Operation not permitted）
+      - SETUID
+      - SETGID
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:1314/api/health/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

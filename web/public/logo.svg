@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 1254 1254" fill="none">
+  <title>云镜监控 Logo</title>
+  <desc>根据参考图重绘的可缩放 SVG 矢量标志，透明背景。</desc>
+  <defs>
+    <linearGradient id="cloudGrad" x1="220" y1="330" x2="1010" y2="710" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1768FF"/>
+      <stop offset="0.34" stop-color="#2B8CFB"/>
+      <stop offset="0.68" stop-color="#72B9F5"/>
+      <stop offset="1" stop-color="#D5EAFE"/>
+    </linearGradient>
+    <linearGradient id="orbitGrad" x1="330" y1="1010" x2="1090" y2="315" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2D8AF8"/>
+      <stop offset="0.5" stop-color="#6DB7F5"/>
+      <stop offset="1" stop-color="#378DEB"/>
+    </linearGradient>
+    <linearGradient id="serverGrad" x1="404" y1="0" x2="820" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#17283B"/>
+      <stop offset="0.5" stop-color="#21364A"/>
+      <stop offset="1" stop-color="#16293D"/>
+    </linearGradient>
+    <linearGradient id="lensGrad" x1="541" y1="780" x2="690" y2="925" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0D55FF"/>
+      <stop offset="0.47" stop-color="#197BFF"/>
+      <stop offset="1" stop-color="#4CA6F3"/>
+    </linearGradient>
+    <linearGradient id="coreGrad" x1="579" y1="812" x2="655" y2="892" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#081A40"/>
+      <stop offset="1" stop-color="#173568"/>
+    </linearGradient>
+    <radialGradient id="greenGrad" cx="0" cy="0" r="1" gradientTransform="translate(684 505) rotate(47) scale(31)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#50DC36"/>
+      <stop offset="1" stop-color="#13B927"/>
+    </radialGradient>
+    <mask id="rackTopMask" maskUnits="userSpaceOnUse" x="404" y="458" width="416" height="112">
+      <rect x="404" y="458" width="416" height="112" rx="26" fill="white"/>
+      <circle cx="758" cy="514" r="18" fill="black"/>
+    </mask>
+    <mask id="rackMidMask" maskUnits="userSpaceOnUse" x="404" y="584" width="416" height="112">
+      <rect x="404" y="584" width="416" height="112" rx="26" fill="white"/>
+      <circle cx="692" cy="639" r="18" fill="black"/>
+      <circle cx="758" cy="639" r="18" fill="black"/>
+    </mask>
+    <mask id="rackBottomMask" maskUnits="userSpaceOnUse" x="404" y="708" width="416" height="112">
+      <rect x="404" y="708" width="416" height="112" rx="26" fill="white"/>
+      <circle cx="613" cy="851" r="144" fill="black"/>
+      <circle cx="758" cy="764" r="18" fill="black"/>
+    </mask>
+    <mask id="lensMask" maskUnits="userSpaceOnUse" x="500" y="735" width="230" height="235">
+      <rect x="500" y="735" width="230" height="235" fill="white"/>
+      <circle cx="586" cy="822" r="17" fill="black"/>
+    </mask>
+  </defs>
+
+  <!-- Cloud outline -->
+  <path d="M374 787
+           C286 766 233 693 233 592
+           C233 488 303 399 402 371
+           C417 270 505 193 612 193
+           C721 193 811 271 825 371
+           C923 397 987 485 987 587
+           C987 686 930 767 851 809"
+        stroke="url(#cloudGrad)" stroke-width="62" stroke-linecap="butt" stroke-linejoin="round"/>
+
+  <!-- Orbital arcs -->
+  <path d="M899 271 C971 317 1028 377 1053 450" stroke="url(#orbitGrad)" stroke-width="13" stroke-linecap="round"/>
+  <path d="M1063 469 C1074 497 1081 524 1084 548" stroke="url(#orbitGrad)" stroke-width="14" stroke-linecap="round"/>
+  <path d="M1087 571 C1088 580 1088 589 1088 598" stroke="url(#orbitGrad)" stroke-width="14" stroke-linecap="round"/>
+  <path d="M850 812
+           C946 766 1049 705 1090 635
+           C1090 800 992 926 842 992
+           C686 1060 489 1038 361 905"
+        stroke="url(#orbitGrad)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="1090" cy="635" r="18" fill="url(#greenGrad)"/>
+  <circle cx="320" cy="850" r="12" fill="url(#orbitGrad)"/>
+  <path d="M331 866 L344 882" stroke="url(#orbitGrad)" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="347" cy="887" r="8" fill="url(#orbitGrad)"/>
+
+  <!-- Server stack with true transparent indicator holes -->
+  <rect x="404" y="458" width="416" height="112" rx="26" fill="url(#serverGrad)" mask="url(#rackTopMask)"/>
+  <circle cx="692" cy="514" r="18" fill="url(#greenGrad)"/>
+
+  <rect x="404" y="584" width="416" height="112" rx="26" fill="url(#serverGrad)" mask="url(#rackMidMask)"/>
+
+  <rect x="404" y="708" width="416" height="112" rx="26" fill="url(#serverGrad)" mask="url(#rackBottomMask)"/>
+
+  <!-- Lens / monitoring eye -->
+  <g mask="url(#lensMask)">
+    <circle cx="613" cy="851" r="95" fill="url(#lensGrad)"/>
+    <circle cx="613" cy="851" r="46" fill="url(#coreGrad)"/>
+  </g>
+</svg>

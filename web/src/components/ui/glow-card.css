@@ -1,0 +1,45 @@
+/**
+ * glow-card —— 光斑跟随卡片（全局效果类，非 Vue 组件）
+ *
+ * 效果：鼠标悬停时，一圈柔光沿卡片边框跟随鼠标移动；移出后淡出，静止零开销。
+ * 用法：给任意元素加 class="glow-card" 即可（卡片元素通常自带 border-radius）。
+ *
+ * 实现原理：
+ *   ::after 伪元素铺一层 radial-gradient 边框光（mask 抠出 1.5px 的边环），
+ *   光心位置由 CSS 变量 --mx / --my 控制；本文件只负责样式，
+ *   坐标写入由同目录 glow-card.js 的 document 级委托监听完成（main.js 已装载）。
+ *
+ * 注意：
+ *   - 若卡片是滚动容器，::after 的 inset:-1px 外扩会产生幻影滚动条，
+ *     需在使用处覆盖 inset: 0（参考 OwnerPanel 的 .owner-auth-screen__card）。
+ *   - hover:none（触屏）与 prefers-reduced-motion 下自动禁用。
+ */
+
+.glow-card { position: relative; }
+
+.glow-card::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), rgba(99, 102, 241, .65), rgba(124, 58, 237, .25) 45%, transparent 70%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity .25s ease;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.glow-card:hover::after { opacity: 1; }
+
+/* 深色模式：光环换白色系 */
+body[arco-theme='dark'] .glow-card::after {
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, .7), rgba(255, 255, 255, .18) 45%, transparent 70%);
+}
+
+@media (prefers-reduced-motion: reduce) { .glow-card::after { transition: none; } }
+@media (hover: none) { .glow-card::after { display: none; } }

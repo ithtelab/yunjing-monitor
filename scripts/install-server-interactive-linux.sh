@@ -1,0 +1,305 @@
+#!/usr/bin/env sh
+set -eu
+
+need_root() {
+  if [ "$(id -u)" -ne 0 ]; then
+    echo "please run as root: sudo sh $0" >&2
+    exit 1
+  fi
+}
+
+ask() {
+  prompt="$1"
+  default="${2:-}"
+  if [ -n "$default" ]; then
+    printf "%s [%s]: " "$prompt" "$default" >&2
+  else
+    printf "%s: " "$prompt" >&2
+  fi
+  if [ -r /dev/tty ] && [ -w /dev/tty ]; then
+    IFS= read -r value </dev/tty || value=""
+  else
+    value=""
+  fi
+  if [ -z "$value" ]; then value="$default"; fi
+  printf "%s" "$value"
+}
+
+ask_secret() {
+  prompt="$1"
+  printf "%s: " "$prompt" >&2
+  if [ -r /dev/tty ] && [ -w /dev/tty ]; then
+    stty -echo </dev/tty >/dev/tty 2>/dev/null || true
+    IFS= read -r value </dev/tty || value=""
+    stty echo </dev/tty >/dev/tty 2>/dev/null || true
+    printf "\n" >&2
+  else
+    value=""
+  fi
+  printf "%s" "$value"
+}
+
+random_secret() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 32
+    return
+  fi
+  dd if=/dev/urandom bs=32 count=1 2>/dev/null | od -An -tx1 | tr -d ' \n'
+}
+
+is_weak_secret() {
+  value="$1"
+  [ -z "$value" ] || [ "$value" = "change-me" ]
+}
+
+existing_env_value() {
+  key="$1"
+  [ -f /etc/vps-monitor/server.env ] || return 0
+  sed -n "s/^${key}=//p" /etc/vps-monitor/server.env | head -n 1
+}
+
+arch_name() {
+  case "$(uname -m)" in
+    x86_64|amd64) echo "amd64" ;;
+    aarch64|arm64) echo "arm64" ;;
+    armv7l|armv7*) echo "armv7" ;;
+    i386|i686) echo "386" ;;
+    *) echo "unsupported" ;;
+  esac
+}
+
+find_binary() {
+  arch="$1"
+  for name in "./vps-server-linux-$arch" "./release/vps-server-linux-$arch" "./vps-server"; do
+    if [ -f "$name" ]; then echo "$name"; return 0; fi
+  done
+  return 1
+}
+
+need_arg() {
+  option="$1"
+  remaining="$2"
+  if [ "$remaining" -lt 2 ]; then
+    echo "$option requires a value" >&2
+    exit 2
+  fi
+}
+
+usage() {
+  cat >&2 <<'EOF'
+usage: install-server-linux.sh [options]
+
+Options:
+  --public-url URL
+  --auth-secret SECRET
+  --backup-encryption-key SECRET
+  --admin-user USER
+  --admin-pass PASSWORD
+  --addr ADDR
+  --max-nodes NUMBER
+  --cors-origins ORIGINS
+  --store-driver json|sqlite
+  --db-path PATH
+  --bin-url URL
+EOF
+}
+
+validate_sqlite_db_path() {
+  path="$1"
+  case "$path" in
+    /*) ;;
+    *) echo "SQLite DB path must be an absolute file path under /var/lib/vps-monitor" >&2; exit 2 ;;
+  esac
+  case "$path" in
+    */) echo "SQLite DB path must be a database file, not a directory: $path" >&2; exit 2 ;;
+  esac
+  if [ -d "$path" ]; then
+    echo "SQLite DB path must be a database file, not an existing directory: $path" >&2
+    exit 2
+  fi
+  case "$path" in
+    /var/lib/vps-monitor/*) ;;
+    *) echo "SQLite DB path must stay under /var/lib/vps-monitor because the systemd service only grants write access there" >&2; exit 2 ;;
+  esac
+  SQLITE_DB_DIR="${path%/*}"
+}
+
+AUTH_SECRET=""
+BACKUP_ENCRYPTION_KEY=""
+ADMIN_USER=""
+ADMIN_PASS=""
+PUBLIC_URL=""
+ADDR=""
+MAX_NODES=""
+CORS_ORIGINS=""
+STORE_DRIVER=""
+DB_PATH=""
+SQLITE_DB_DIR=""
+BIN_URL=""
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --public-url) need_arg "$1" "$#"; PUBLIC_URL="$2"; shift 2 ;;
+    --auth-secret) need_arg "$1" "$#"; AUTH_SECRET="$2"; shift 2 ;;
+    --backup-encryption-key) need_arg "$1" "$#"; BACKUP_ENCRYPTION_KEY="$2"; shift 2 ;;
+    --admin-user) need_arg "$1" "$#"; ADMIN_USER="$2"; shift 2 ;;
+    --admin-pass) need_arg "$1" "$#"; ADMIN_PASS="$2"; shift 2 ;;
+    --addr) need_arg "$1" "$#"; ADDR="$2"; shift 2 ;;
+    --max-nodes) need_arg "$1" "$#"; MAX_NODES="$2"; shift 2 ;;
+    --cors-origins) need_arg "$1" "$#"; CORS_ORIGINS="$2"; shift 2 ;;
+    --store-driver) need_arg "$1" "$#"; STORE_DRIVER="$2"; shift 2 ;;
+    --db-path) need_arg "$1" "$#"; DB_PATH="$2"; shift 2 ;;
+    --bin-url) need_arg "$1" "$#"; BIN_URL="$2"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "unknown option: $1" >&2; usage; exit 2 ;;
+  esac
+done
+
+need_root
+
+ARCH="$(arch_name)"
+if [ "$ARCH" = "unsupported" ]; then
+  echo "unsupported architecture: $(uname -m)" >&2
+  exit 1
+fi
+
+echo "VPS Monitor center server installer"
+echo "detected: linux/$ARCH"
+
+if [ -z "$BACKUP_ENCRYPTION_KEY" ]; then
+  BACKUP_ENCRYPTION_KEY="$(existing_env_value BACKUP_ENCRYPTION_KEY)"
+fi
+if [ -z "$PUBLIC_URL" ]; then PUBLIC_URL="$(ask "Public URL" "https://monitor.example.com")"; fi
+if [ -z "$AUTH_SECRET" ]; then AUTH_SECRET="$(ask_secret "Internal secret (leave empty to generate)")"; fi
+if [ -z "$BACKUP_ENCRYPTION_KEY" ]; then BACKUP_ENCRYPTION_KEY="$(ask_secret "Backup encryption key (leave empty to generate independently)")"; fi
+if [ -z "$ADMIN_USER" ]; then ADMIN_USER="$(ask "Admin username" "admin")"; fi
+if [ -z "$ADMIN_PASS" ]; then ADMIN_PASS="$(ask_secret "Admin password (leave empty to generate)")"; fi
+if [ -z "$ADDR" ]; then ADDR="$(ask "Listen address" ":3000")"; fi
+if [ -z "$MAX_NODES" ]; then MAX_NODES="$(ask "Max nodes" "2000")"; fi
+if [ -z "$CORS_ORIGINS" ]; then CORS_ORIGINS="$(ask "Allowed CORS origins (comma-separated, empty for same-origin only)" "")"; fi
+if [ -z "$STORE_DRIVER" ]; then STORE_DRIVER="$(ask "Storage driver (json/sqlite)" "json")"; fi
+case "$STORE_DRIVER" in
+  json|sqlite) ;;
+  *) echo "unsupported storage driver: $STORE_DRIVER" >&2; exit 2 ;;
+esac
+if [ "$STORE_DRIVER" = "sqlite" ]; then
+  if [ -z "$DB_PATH" ]; then DB_PATH="$(ask "SQLite DB path" "/var/lib/vps-monitor/server.db")"; fi
+  validate_sqlite_db_path "$DB_PATH"
+fi
+if [ -z "$BIN_URL" ]; then BIN_URL="$(ask "Binary download URL (empty for local file)" "")"; fi
+
+GENERATED_AUTH_SECRET=0
+GENERATED_BACKUP_ENCRYPTION_KEY=0
+GENERATED_ADMIN_PASS=0
+if is_weak_secret "$AUTH_SECRET"; then
+  AUTH_SECRET="$(random_secret)"
+  GENERATED_AUTH_SECRET=1
+fi
+if is_weak_secret "$BACKUP_ENCRYPTION_KEY"; then
+  BACKUP_ENCRYPTION_KEY="$(random_secret)"
+  GENERATED_BACKUP_ENCRYPTION_KEY=1
+fi
+if is_weak_secret "$ADMIN_PASS"; then
+  ADMIN_PASS="$(random_secret)"
+  GENERATED_ADMIN_PASS=1
+fi
+
+install -d /etc/vps-monitor /usr/local/bin /var/lib/vps-monitor
+if [ -n "$SQLITE_DB_DIR" ]; then
+  install -d "$SQLITE_DB_DIR"
+fi
+umask 077
+
+systemctl stop vps-server 2>/dev/null || true
+pkill -f '/usr/local/bin/vps-server' 2>/dev/null || true
+sleep 1
+rm -f /usr/local/bin/vps-server 2>/dev/null || true
+if [ -e /usr/local/bin/vps-server ]; then
+  chattr -i /usr/local/bin/vps-server 2>/dev/null || true
+  rm -f /usr/local/bin/vps-server 2>/dev/null || true
+fi
+if [ -e /usr/local/bin/vps-server ]; then
+  echo "failed to remove old /usr/local/bin/vps-server" >&2
+  ls -l /usr/local/bin/vps-server >&2 || true
+  exit 1
+fi
+
+if [ -n "$BIN_URL" ]; then
+  TMP="$(mktemp)"
+  curl -fsSL "$BIN_URL" -o "$TMP"
+  install -m 0755 "$TMP" /usr/local/bin/vps-server
+  rm -f "$TMP"
+else
+  BIN="$(find_binary "$ARCH")" || { echo "vps-server binary not found for linux/$ARCH" >&2; exit 1; }
+  install -m 0755 "$BIN" /usr/local/bin/vps-server
+fi
+
+if ! strings /usr/local/bin/vps-server 2>/dev/null | grep -q "monitor-party-admin-v1"; then
+  echo "installed vps-server does not contain admin backend marker; wrong binary may have been installed" >&2
+  exit 1
+fi
+
+cat >/etc/vps-monitor/server.env <<EOF
+ADDR=$ADDR
+AUTH_SECRET=$AUTH_SECRET
+BACKUP_ENCRYPTION_KEY=$BACKUP_ENCRYPTION_KEY
+BACKUP_DIR=/var/lib/vps-monitor/backups
+BACKUP_INTERVAL=24h
+ADMIN_USER=$ADMIN_USER
+ADMIN_PASS=$ADMIN_PASS
+PUBLIC_URL=$PUBLIC_URL
+DATA_PATH=/var/lib/vps-monitor/server.json
+MAX_NODES=$MAX_NODES
+EOF
+if [ -n "$STORE_DRIVER" ]; then
+  printf "STORE_DRIVER=%s\n" "$STORE_DRIVER" >>/etc/vps-monitor/server.env
+fi
+if [ -n "$DB_PATH" ]; then
+  printf "DB_PATH=%s\n" "$DB_PATH" >>/etc/vps-monitor/server.env
+fi
+if [ -n "$CORS_ORIGINS" ]; then
+  printf "CORS_ORIGINS=%s\n" "$CORS_ORIGINS" >>/etc/vps-monitor/server.env
+fi
+chmod 600 /etc/vps-monitor/server.env
+
+cat >/etc/systemd/system/vps-server.service <<'EOF'
+[Unit]
+Description=VPS Monitor Center Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/vps-monitor/server.env
+ExecStart=/usr/local/bin/vps-server
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/vps-monitor /etc/vps-monitor
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now vps-server
+sleep 1
+PORT="${ADDR##*:}"
+if [ -z "$PORT" ] || [ "$PORT" = "$ADDR" ]; then PORT="3000"; fi
+if ! curl -fsS "http://127.0.0.1:$PORT/admin" 2>/dev/null | grep -q "monitor-party-admin-v1"; then
+  echo "warning: local /admin check failed; inspect journalctl -u vps-server" >&2
+fi
+systemctl --no-pager --full status vps-server || true
+echo "server installed: $PUBLIC_URL"
+if [ "$GENERATED_AUTH_SECRET" = "1" ]; then
+  echo "generated internal AUTH_SECRET in /etc/vps-monitor/server.env"
+fi
+if [ "$GENERATED_BACKUP_ENCRYPTION_KEY" = "1" ]; then
+  echo "generated independent BACKUP_ENCRYPTION_KEY in /etc/vps-monitor/server.env"
+fi
+if [ "$GENERATED_ADMIN_PASS" = "1" ]; then
+  echo "generated admin login: $ADMIN_USER / $ADMIN_PASS"
+fi

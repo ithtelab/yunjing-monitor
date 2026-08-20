@@ -1,0 +1,52 @@
+node_modules/
+.git.tmp-parent-upload/
+.codegraph/
+
+.env
+.env.*
+!.env.example
+*.env
+
+*.log
+*.tmp
+*.bak
+
+server.env
+agent.env
+docker.env
+
+# 本地大体积发布二进制（由 GitHub Release 提供，不进入仓库）
+.package-vps-server-*
+
+# 本地运行和调试产物（截图、验证二进制、运行数据、明文配置均不提交）
+.local-run/
+
+# 构建输出（由 scripts/build-release.* 生成，发布二进制进入 GitHub Release）
+release/
+internal/server/agent_bins/vps-agent-*
+AGENTS.md
+WORKLOG.md
+docs/README.old.md
+
+# 私钥、证书容器和本地凭据
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+
+# 本地运行数据（含节点 token 哈希、遥测），不入仓库
+data/server.json
+data/server.db
+data/server.db-*
+data/visitor-stats.json
+data/auth-sessions.json
+data/exchange-rate.json
+data/metrics-history.json
+data/alerts.json
+data/custom-release-notes.json
+data/update-request*.json
+data/update-status.json
+data/update-history.json
+data/backups/
+data/ads/
