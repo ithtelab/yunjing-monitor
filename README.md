@@ -1,133 +1,103 @@
-<div align="center">
-
-# 云镜监控 / Yunjing Monitor
-
-**轻量级 VPS / 服务器监控面板 ｜ Lightweight VPS / Server Monitoring Panel**
-
-由中心端 `vps-server` 与采集端 `vps-agent` 组成：实时采集 CPU、内存、硬盘、网络、负载、连接数与在线状态，提供公开监控面板、管理后台、节点管理、Agent 安装命令生成、Agent 二进制下载与 WebSocket 实时推送。
-
-A lightweight monitoring system composed of a central `vps-server` and per-node `vps-agent` collectors. It captures CPU / memory / disk / network / load / connections / online status in real time, and ships a public panel, an admin console, node management, one-click agent install commands, embedded agent binary downloads, and a live WebSocket feed.
-
----
-
-🇨🇳 中文 ｜ 🇬🇧 English（双语文档 / bilingual document）
-
-</div>
-
----
-
-## 目录 / Table of Contents
-
-- [简介 / Overview](#简介--overview)
-- [特性 / Features](#特性--features)
-- [架构 / Architecture](#架构--architecture)
-- [演示截图 / Screenshots](#演示截图--screenshots)
-- [快速开始 / Quick Start](#快速开始--quick-start)
-- [一键安装 / One-click Install](#一键安装--one-click-install)
-- [添加 Agent 节点 / Add an Agent Node](#添加-agent-节点--add-an-agent-node)
-- [配置文件 / Configuration](#配置文件--configuration)
-- [数据文件与流量统计 / Data & Traffic Accounting](#数据文件与流量统计--data--traffic-accounting)
-- [本地开发 / Local Development](#本地开发--local-development)
-- [构建 / Build](#构建--build)
-- [技术栈 / Tech Stack](#技术栈--tech-stack)
-- [运维 / Operations](#运维--operations)
-- [安全建议 / Security Notes](#安全建议--security-notes)
-- [常见问题 / FAQ](#常见问题--faq)
-- [参与贡献 / Contributing](#参与贡献--contributing)
-- [License](#license)
-
----
-
-## 简介 / Overview
-
-**中文**
-
-云镜监控是一个轻量级 VPS / 服务器监控面板，由中心端 `vps-server` 和采集端 `vps-agent` 组成。中心端提供公开监控面板、管理员后台、节点管理、Agent 安装命令生成、Agent 二进制下载和 WebSocket 数据推送；Agent 负责采集并上报 CPU、内存、硬盘、网络、负载、连接数和在线状态。
-
-默认示例域名：`https://monitor.example.com`
-
-**English**
-
-Yunjing Monitor is a lightweight VPS / server monitoring panel built from two binaries:
-
-- **`vps-server`** (central): public monitoring panel, admin console, node management, agent-install-command generator, embedded agent binary download, and a live WebSocket push service.
-- **`vps-agent`** (collector): reads local config, samples system metrics on a schedule, and reports to the center using a per-node token.
-
-Default example domain: `https://monitor.example.com`
-
-> ℹ️ **来源说明 / Provenance**：本项目参考了 Akile Monitor、哪吒监控等同类产品的监控信息架构与交互思路；当前代码、视觉组件与品牌资产由云镜监控项目独立维护，且不是这些项目的官方发行版。
-> Yunjing Monitor takes product-level inspiration from monitoring dashboards such as Akile Monitor and Nezha Monitor. Its current code, visual components, and brand assets are independently maintained and it is not an official distribution of either project.
-
----
-
-## 特性 / Features
-
-- **一体化中心端 / All-in-one central server**：公开面板、管理后台、API、WebSocket、Agent 下载均由 `vps-server` 提供，单个二进制配合一个持久化数据目录即可上线。
-- **多平台 Agent / Multi-platform agent**：Linux `amd64 / arm64 / armv7 / 386`，Windows `amd64 / arm64 / 386`。
-- **实时监控 / Real-time telemetry**：CPU、内存、Swap、硬盘、网络速率、累计流量、负载、运行时间和在线状态。前台展开节点详情可查看系统、内核、CPU 型号、物理/逻辑核心、磁盘读写速率、进程数、TCP/UDP、运行时长与数据更新时间。
-- **节点管理 / Node management**：预创建节点（`pending` 占位）、生成安装命令、删除节点、编辑套餐/购买信息、一键导出/导入节点备份 JSON。
-- **节点级 token / Per-node tokens**：每个节点独立 Agent token；鉴权使用 SHA-256 哈希，后台回看副本使用 `AUTH_SECRET` 派生密钥进行 AES-GCM 加密，不保存明文。
-- **可插拔存储 / Pluggable storage**：默认 JSON 文件存储；可选 SQLite（`STORE_DRIVER=sqlite`，pure-Go `modernc.org/sqlite`，无 CGO）。首次启用时会一次性从旧 `server.json` 自动导入。
-- **每节点周期流量 / Per-node cycle traffic**：默认每月 1 号重置，后台可设 1-31 号；小月无对应日期自动按当月最后一天重置；计数器重置/回滚时只更新基准值，不扣减本周期流量；统计由中心端持久化，节点或中心端重启后继续累计。
-- **安全加固 / Hardened by default**：拒绝默认弱密钥、限制 Node ID 字符集、收紧配置文件权限、Agent 默认要求 HTTPS（仅 `localhost` / `127.0.0.1` 允许 HTTP）。
-- **无第三方 WebSocket 库 / Hand-rolled WebSocket**：中心端 WebSocket 为手写实现，零额外运行时依赖。
-- **数据安全 / Data safety**：加密全量备份、逐文件 SHA-256、SQLite 一致性快照、恢复预演、恢复前回滚包、定时备份与可选 WebDAV 异地同步。
-- **运维中心 / Operations center**：节点健康、资产成本、市场运营、备份状态、资源/离线/到期告警、Telegram/Webhook 通知和更新历史。
-- **可靠市场 / Reliable marketplace**：上架与 Owner 编辑原子提交，节点和上架支持回收站恢复，关键操作写入审计日志。
-- **历史趋势 / Historical metrics**：按分钟降采样保留 7 天，前台支持实时、1h、6h、24h、7d 趋势。
-- **平台自动化 / Platform automation**：节点分组与标签、保存视图、维护窗口、公开状态页、Agent 灰度升级、API Key、OpenAPI 和 HMAC Webhook。
-- **统一用户账号 / Unified user accounts**：用户可自助注册并管理自己名下的私有或公开监控节点、Agent 安装命令、到期日期和市场上架，无需管理员逐台创建。
-- **服务可用性监控 / Service monitoring**：支持 HTTP、HTTPS、TCP、Ping 和 SSL，提供状态码与响应关键字校验、连续失败与持续时间策略、恢复通知、IP/证书变化和证书到期提醒。
-- **多地区探测 / Regional probes**：将现有 Agent 绑定为远程探测点，每 30 秒拉取任务并最多四路并发执行；中心端统一汇总 24 小时可用率、平均延迟和各地区结果。
-- **可组织的监控概览 / Organized overview**：空数据首次接入引导、节点筛选与排序、列表/卡片/地区分布视图和账号偏好保存，兼顾桌面与移动端。
-- **流量额度 / Traffic quotas**：按节点设置周期流量额度和告警阈值，展示当前用量、下次重置时间，并在超限及恢复时生成事件与通知。
-- **市场信任 / Marketplace trust**：卖家信任档案、举报处理、需求订阅与统一币种价格分析。
-- **可安装前端 / Installable frontend**：公开面板提供 PWA manifest 和离线应用壳，可安装到桌面或手机；实时数据恢复联网后继续读取。
-
----
-
-## 架构 / Architecture
-
-```text
-                 ┌────────────────── 中心端 vps-server ──────────────────┐
-                 │  公开面板 /        管理后台 /admin       API            │
-                 │  WebSocket /ws     Agent 下载 /download/*   安装脚本 /install/*  │
-                 └───────────────────────────┬──────────────────────────────┘
-                                              │ HTTPS  +  Bearer token  +  X-Node-ID
-            POST /api/agent/report (Metrics) │   GET /api/agent/ping
-                                              ▼
-        ┌────────────── 采集端 vps-agent ─────────────┐
-        │  config.env → 定时采集 → 速率差分 → 上报       │
-        │  子命令: run | once | test | version         │
-        │  Windows Service / systemd / console 三模式   │
-        └──────────────────────────────────────────────┘
-                              ▲
-                              │ fetch /config.json → WebSocket /ws + REST /api/*
-            公开前端 SPA (Vue3 + Vite + Arco + Highcharts，编译入 web/dist)
-```
-
-**数据流 / Data flow**
-
-1. Agent 按 `BasicInterval`（默认 2s）单 ticker 触发一次采集；磁盘用量、连接数分别按 `DiskInterval`(30s)、`ConnectionInterval`(60s) 子采样以摊销开销。CPU%、网络速率、磁盘 IO 速率由相邻两次计数器差分得到。
-2. Agent 通过 `POST /api/agent/report` 上报 `Metrics`，请求头携带 `X-Node-ID` 与 `Authorization: Bearer <token>`，单一尝试、无重试/无队列。
-3. 中心端校验 token 哈希（`SHA-256(base64url)`）后 `UpsertReport` 落库，并 `MarkDirty()` 使下一次公开读取重建快照。
-4. 公开前端通过 `/config.json` 获取 WebSocket 地址，连接 `/ws` 后由中心端推送 `AkileHosts` 快照（共享同一份缓存序列化字节，至多每秒重建一次）。
-
-**鉴权模型 / Auth model**
-
-- **Agent**：`X-Node-ID` + `Authorization: Bearer` → token 哈希比对（常量时间比较）。
-- **Admin**：`/api/admin/login` 用常量时间比较校验账密 → 签发持久化 `monitor_admin` 会话 cookie；勾选“保持登录”后最长 30 天。所有变更类 POST 校验 `Origin`（CSRF 防护），会话文件使用 `AUTH_SECRET` 保护。
-
----
-
-## 演示截图 / Screenshots
-
 <p align="center">
-  <img src="preview.png" alt="云镜监控界面 / Yunjing Monitor UI Preview" width="880">
+  <img src="./Logo.svg" width="104" height="104" alt="云镜监控 Logo">
 </p>
 
-> 截图文件位于仓库根目录 `preview.png`。
-> The screenshot lives at the repository root as `preview.png`.
+<h1 align="center">云镜监控</h1>
+
+<p align="center"><strong>让每一台服务器都清晰可见。</strong></p>
+
+<p align="center">
+  面向个人站长与轻量团队的开源服务器可观测平台<br>
+  实时监控、告警通知、服务探测、资产管理与服务器市场，一套系统完成。
+</p>
+
+<p align="center">
+  <a href="https://github.com/ithtelab/yunjing-monitor/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ithtelab/yunjing-monitor/ci.yml?branch=main&style=flat-square&label=build" alt="Build status"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/github/license/ithtelab/yunjing-monitor?style=flat-square&label=license" alt="MIT License"></a>
+  <img src="https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go 1.26">
+  <img src="https://img.shields.io/badge/Vue-3-42B883?style=flat-square&logo=vuedotjs&logoColor=white" alt="Vue 3">
+  <img src="https://img.shields.io/badge/self--hosted-ready-111827?style=flat-square" alt="Self-hosted">
+</p>
+
+<p align="center">
+  <a href="https://vps.sbai.shop/monitor">在线演示</a>
+  · <a href="#快速开始--quick-start">快速部署</a>
+  · <a href="./docs/api.md">API 文档</a>
+  · <a href="./CONTRIBUTING.md">参与贡献</a>
+  · <a href="https://github.com/ithtelab/yunjing-monitor/issues">问题反馈</a>
+</p>
+
+<p align="center">
+  <img src="./docs/images/yunjing-hero.png" width="1120" alt="云镜监控品牌首页">
+</p>
+
+## 项目简介
+
+云镜监控（Yunjing Monitor）是一套可自行部署的 VPS 与服务器可观测平台。中心端 `vps-server` 将前台、管理后台、API、WebSocket 与 Agent 分发整合为单个二进制；采集端 `vps-agent` 负责低开销采集和安全上报，适用于个人主机、跨地区 VPS、家庭实验室及小型基础设施。
+
+项目不仅呈现 CPU、内存、磁盘和网络数据，还覆盖节点生命周期、到期与资源告警、服务可用性、历史趋势、用户自助接入、市场上架及备份恢复，帮助你从“看见机器”走向“管理资产”。
+
+> **项目状态**：持续维护中。生产部署建议启用 HTTPS、SQLite、独立高强度密钥和异地备份；升级前请先备份持久化数据目录。
+
+## 核心能力
+
+| 领域 | 能力 |
+| --- | --- |
+| **实时可观测** | CPU、内存、Swap、磁盘、网络速率、累计流量、负载、连接数、运行时间与在线状态 |
+| **趋势与告警** | 实时 / 1h / 6h / 24h / 7d 趋势，离线、资源、流量额度、到期和证书告警 |
+| **服务探测** | HTTP、HTTPS、TCP、Ping、SSL，多地区探测点、可用率与响应延迟 |
+| **节点与用户** | Linux / Windows Agent，节点分组与标签，用户注册、自助申请和名下节点管理 |
+| **资产与市场** | 成本与续费日期、汇率换算、服务器上架、卖家档案、举报与需求订阅 |
+| **通知与自动化** | Telegram、Webhook、ShowDoc PushPlus、API Key、OpenAPI、HMAC Webhook 与维护窗口 |
+| **数据可靠性** | JSON / SQLite、加密全量备份、校验、恢复预演、回滚包与 WebDAV 异地同步 |
+| **多端体验** | 响应式界面、明暗主题、国际化、PWA、列表 / 卡片 / 地区分布视图 |
+
+## 界面预览
+
+<p align="center">
+  <img src="./docs/images/yunjing-overview.png" width="1120" alt="云镜监控实时观测台">
+</p>
+
+<p align="center"><sub>实时观测台 · 当前界面会随版本持续演进</sub></p>
+
+## 系统架构
+
+```text
+ Browser / PWA
+      │  HTTPS · REST · WebSocket
+      ▼
+┌──────────────────── vps-server ────────────────────┐
+│ Public UI │ Admin │ API │ Alerts │ Probe │ Backup │
+└────────────────────────┬────────────────────────────┘
+                         │ Per-node token · HTTPS
+              ┌──────────┴──────────┐
+              ▼                     ▼
+       vps-agent / Linux     vps-agent / Windows
+       metrics + probes      metrics + probes
+```
+
+- **中心端**：一个二进制承载前端静态资源、API、WebSocket、管理后台和 Agent 下载。
+- **采集端**：按节点签发独立 Token，采集系统指标并执行可选的远程探测任务。
+- **存储层**：支持 JSON 与纯 Go SQLite；持久化目录可独立备份、迁移和恢复。
+- **安全边界**：Agent Token 哈希校验、后台会话、Origin 校验、最小权限容器与加密备份。
+
+## 文档导航
+
+| 文档 | 说明 |
+| --- | --- |
+| [快速开始](#快速开始--quick-start) | 安装中心端并完成首次访问 |
+| [Agent 接入](#添加-agent-节点--add-an-agent-node) | 添加 Linux / Windows 监控节点 |
+| [配置参考](#配置文件--configuration) | 环境变量、存储、备份和运行参数 |
+| [API 文档](./docs/api.md) | 公开接口、认证方式与集成说明 |
+| [安全策略](./SECURITY.md) | 漏洞报告范围与私密提交流程 |
+| [贡献指南](./CONTRIBUTING.md) | 本地开发、提交规范与 Pull Request |
+
+<details>
+<summary><strong>English overview</strong></summary>
+
+Yunjing Monitor is a self-hosted observability platform for VPS fleets and lightweight infrastructure. It combines real-time telemetry, alerting, uptime checks, asset lifecycle management, user self-service, marketplace workflows, encrypted backups, and a responsive PWA. The central server ships as a single Go binary with the Vue frontend embedded; lightweight agents are available for Linux and Windows.
+
+</details>
 
 ---
 
