@@ -2,7 +2,7 @@ module vps-agent
 
 go 1.25.0
 
-toolchain go1.26.6
+toolchain go1.26.10
 
 require (
 	golang.org/x/crypto v0.55.0
